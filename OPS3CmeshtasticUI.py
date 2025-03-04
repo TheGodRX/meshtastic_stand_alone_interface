@@ -13,7 +13,7 @@ pygame.init()
 
 # Screen dimensions for fullscreen
 SCREEN_WIDTH, SCREEN_HEIGHT = pygame.display.Info().current_w, pygame.display.Info().current_h  # Full screen dimensions
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN | pygame.DOUBLEBUF)
 pygame.display.set_caption("Meshtastic OLED Display Mirror")
 
 # Font for displaying text on the screen (larger font for fullscreen)
@@ -29,6 +29,8 @@ messages_received = []  # List of received messages
 channel = 0  # Default channel to send messages
 channel_input_mode = False  # Whether the user is typing a channel number
 channel_input = ""  # Input field for typing channel number
+flash_visible = True  # Toggle for flashing effect
+last_flash_time = time.time()  # Time tracking for flashing
 
 # Function to get node info
 def get_node_info(iface):
@@ -43,7 +45,7 @@ def get_node_info(iface):
 
 # Function to display device info including node location, signal, and messages
 def display_device_info(iface):
-    global message_input, channel, channel_input_mode, channel_input
+    global message_input, channel, channel_input_mode, channel_input, flash_visible, last_flash_time
 
     try:
         # Clear the screen
@@ -56,13 +58,20 @@ def display_device_info(iface):
         # Position the circle and arrow on the upper-right corner
         node_x = SCREEN_WIDTH - circle_radius - 60  # Padding from the right edge (reduced to move it left)
         node_y = circle_radius + 40  # Padding from the top edge (reduced to move it down slightly)
-        pygame.draw.circle(screen, (0, 255, 255), (node_x, node_y), circle_radius, 2)  # Cyan circle
 
-        # Draw the arrow inside the circle (direction)
-        arrow_angle = math.radians(45)  # Example arrow direction
-        arrow_x = node_x + arrow_length * math.cos(arrow_angle)
-        arrow_y = node_y - arrow_length * math.sin(arrow_angle)
-        pygame.draw.line(screen, (0, 255, 255), (node_x, node_y), (arrow_x, arrow_y), 4)  # Cyan arrow
+        # Flash the circle and arrow at an imperceptible speed (100 times faster)
+        current_time = time.time()
+        if current_time - last_flash_time >= 0.0001:  # 0.1ms interval (100 times faster)
+            flash_visible = not flash_visible
+            last_flash_time = current_time
+
+        if flash_visible:
+            pygame.draw.circle(screen, (0, 255, 255), (node_x, node_y), circle_radius, 2)  # Cyan circle
+            # Draw the arrow inside the circle (direction)
+            arrow_angle = math.radians(45)  # Example arrow direction
+            arrow_x = node_x + arrow_length * math.cos(arrow_angle)
+            arrow_y = node_y - arrow_length * math.sin(arrow_angle)
+            pygame.draw.line(screen, (0, 255, 255), (node_x, node_y), (arrow_x, arrow_y), 4)  # Cyan arrow
 
         # Get node information
         node_info = get_node_info(iface)
@@ -88,7 +97,7 @@ def display_device_info(iface):
             wrapped_text = wrap_text(received_msg, SCREEN_WIDTH - int(SCREEN_WIDTH * 0.06))
             y_offset += int(SCREEN_HEIGHT * 0.02)  # Add spacing before the received message
             for line in wrapped_text:
-                msg_surface = font.render(f"Recv: {line}", True, (0, 255, 255))  # Neon blue text
+                msg_surface = font.render(f"Recv: {line}", True, (255, 165, 0))  # Retro cyberpunk neon orange
                 screen.blit(msg_surface, (int(SCREEN_WIDTH * 0.05), y_offset))  # Draw it
                 y_offset += int(SCREEN_HEIGHT * 0.03)  # Increase offset for the next line
 
@@ -98,7 +107,7 @@ def display_device_info(iface):
             wrapped_text = wrap_text(sent_msg, SCREEN_WIDTH - int(SCREEN_WIDTH * 0.06))
             y_offset += int(SCREEN_HEIGHT * 0.02)  # Add spacing before the sent message
             for line in wrapped_text:
-                msg_surface = font.render(f"Sent: {line}", True, (0, 255, 255))  # Neon blue text
+                msg_surface = font.render(f"Sent: {line}", True, (255, 165, 0))  # Retro cyberpunk neon orange
                 screen.blit(msg_surface, (int(SCREEN_WIDTH * 0.05), y_offset))  # Draw it
                 y_offset += int(SCREEN_HEIGHT * 0.03)  # Increase offset for the next line
 
