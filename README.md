@@ -17,4 +17,11 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Run the script
-python3 OPS3CmeshtasticUI.py /dev/ttyUSB0                        # Replace with your actual serial port  -- (use ls /dev/tty* to find out your port)
+python3 OPS3CmeshtasticUI.py /dev/ttyUSB0    # Replace with your actual serial port  -- (use ls /dev/tty* to find out your port)
+
+# To change Channel
+(type)   /channel    (hit enter)
+(type channel number 0-99) (hit Enter)
+
+# To Send Message 
+(type message hit enter)
