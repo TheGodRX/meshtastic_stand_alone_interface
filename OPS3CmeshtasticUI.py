@@ -27,6 +27,8 @@ message_input = ""  # Input field for typing messages
 messages_sent = []  # List of sent messages
 messages_received = []  # List of received messages
 channel = 0  # Default channel to send messages
+channel_input_mode = False  # Whether the user is typing a channel number
+channel_input = ""  # Input field for typing channel number
 
 # Function to get node info
 def get_node_info(iface):
@@ -41,7 +43,7 @@ def get_node_info(iface):
 
 # Function to display device info including node location, signal, and messages
 def display_device_info(iface):
-    global message_input
+    global message_input, channel, channel_input_mode, channel_input
 
     try:
         # Clear the screen
@@ -70,7 +72,8 @@ def display_device_info(iface):
             f"Node: {node_info['node_name']}",
             f"Location: {node_info['location']}",
             f"Signal: {node_info['signal_strength']} dBm",
-            f"Role: {node_info['role']}"
+            f"Role: {node_info['role']}",
+            f"Channel: {channel}"  # Display the current channel
         ]
 
         y_offset = int(SCREEN_HEIGHT * 0.05)  # Start drawing node info at the top
@@ -99,8 +102,26 @@ def display_device_info(iface):
                 screen.blit(msg_surface, (int(SCREEN_WIDTH * 0.05), y_offset))  # Draw it
                 y_offset += int(SCREEN_HEIGHT * 0.03)  # Increase offset for the next line
 
+        # Display connected nodes on the left side, below the messages
+        try:
+            nodes = iface.nodes
+            node_text = [f"Connected Nodes: {len(nodes)}"]
+            for node in nodes.values():
+                node_text.append(f"Node {node['user']['id']}: {node['user']['longName']}")
+
+            y_offset += int(SCREEN_HEIGHT * 0.05)  # Add extra spacing below the messages
+            for line in node_text:
+                msg_surface = font.render(line, True, (0, 255, 255))  # Neon blue text
+                screen.blit(msg_surface, (int(SCREEN_WIDTH * 0.05), y_offset))
+                y_offset += int(SCREEN_HEIGHT * 0.03)
+        except Exception as e:
+            print(f"Error displaying connected nodes: {e}")
+
         # Display the message input field at the bottom
-        msg_surface = large_font.render(f"Send: {message_input}", True, (0, 255, 255))  # Neon blue text
+        if channel_input_mode:
+            msg_surface = large_font.render(f"Set Channel: {channel_input}", True, (0, 255, 255))  # Neon blue text
+        else:
+            msg_surface = large_font.render(f"Send: {message_input}", True, (0, 255, 255))  # Neon blue text
         screen.blit(msg_surface, ((SCREEN_WIDTH - msg_surface.get_width()) // 2, SCREEN_HEIGHT - int(SCREEN_HEIGHT * 0.1)))
 
         # Update the display
@@ -111,10 +132,10 @@ def display_device_info(iface):
 
 # Function to send a message
 def send_message(message, iface):
+    global channel
     try:
-        iface.sendText(message, channelIndex=0)  # Send message on channel 0
-        messages_sent.append(message)
-        # Do not clear messages in the received list when sending a message
+        iface.sendText(message, channelIndex=channel)  # Send message on the selected channel
+        messages_sent.append(f"Channel {channel}: {message}")
     except Exception as e:
         print(f"Error sending message: {e}")
 
@@ -146,30 +167,9 @@ def wrap_text(text, max_width):
         lines.append(current_line.strip())  # Add the last line
     return lines
 
-# Function to display node info for connected nodes
-def display_connected_nodes(iface):
-    try:
-        # Fetch all connected nodes
-        nodes = iface.nodes
-        node_text = [f"Connected Nodes: {len(nodes)}"]
-        for node in nodes.values():
-            node_text.append(f"Node {node['user']['id']}: {node['user']['longName']}")
-
-        # Display node info on the screen
-        y_offset = SCREEN_HEIGHT // 2
-        for line in node_text:
-            msg_surface = font.render(line, True, (0, 255, 255))  # Neon blue text
-            screen.blit(msg_surface, (int(SCREEN_WIDTH * 0.05), y_offset))
-            y_offset += int(SCREEN_HEIGHT * 0.03)
-
-        pygame.display.flip()
-
-    except Exception as e:
-        print(f"Error displaying connected nodes: {e}")
-
 # Main function
 async def main():
-    global message_input  # Ensure message_input is accessible in the function scope
+    global message_input, channel, channel_input_mode, channel_input
 
     if len(sys.argv) < 2:
         print("Usage: python simcc.py <SERIAL_PORT>")
@@ -189,6 +189,7 @@ async def main():
     print("Serial Interactive Meshtastic Chat Client 0.1.0")
     print("-----------------------------------------------")
     print("Type your message and press Enter to send.")
+    print("Type '/channel' to change the channel.")
     print("Press Ctrl+C to exit...\n")
 
     # Subscribe to receive messages
@@ -198,18 +199,36 @@ async def main():
     while True:
         try:
             display_device_info(iface)  # Update display with node and message info
-            display_connected_nodes(iface)  # Update display with connected nodes
 
-            # Wait for user input to send message
+            # Wait for user input to send message or change channel
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit(0)
 
                 if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_RETURN and message_input:
-                        send_message(message_input, iface)
-                        message_input = ""  # Clear input field after sending
+                    if event.key == pygame.K_RETURN:
+                        if message_input.strip() == "/channel":  # Activate channel input mode
+                            channel_input_mode = True
+                            message_input = ""
+                        elif channel_input_mode:
+                            # Set the new channel
+                            try:
+                                new_channel = int(message_input)
+                                if 0 <= new_channel <= 9:
+                                    channel = new_channel
+                                    print(f"Channel changed to {channel}")
+                                else:
+                                    print("Invalid channel. Must be between 0 and 9.")
+                            except ValueError:
+                                print("Invalid input. Please enter a number.")
+                            channel_input_mode = False
+                            message_input = ""
+                        else:
+                            # Send the message
+                            if message_input:
+                                send_message(message_input, iface)
+                                message_input = ""  # Clear input field after sending
                     elif event.key == pygame.K_BACKSPACE:
                         message_input = message_input[:-1]  # Remove last character
                     elif event.key == pygame.K_ESCAPE:
